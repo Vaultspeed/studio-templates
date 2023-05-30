@@ -1,0 +1,434 @@
+Template DIMENSION
+//Start building the subselects for each HUB and LNK from the BRIDGE table 
+    comp_group_start $ DVO_BASE_GROUP$ INL_V_GRP
+	componentGroupRepeatedByComponent DVO
+
+        //For each table take the specific attributes
+        consists of target inline_view DVO_BASE$
+        componentrepeatedbycomponent DIMB
+    
+            Artifact BASE_OBJECT_H_KEY
+                expressedBy DVO_SRC$.OBJECT_H_KEY
+                    expressionRepeatedByColumn DVO_SRC$.OBJECT_H_KEY
+
+            Artifact BASE_OBJECT_L_H_KEY
+                expressedBy DVO_SRC$.OBJECT_L_H_KEY
+                    expressionRepeatedByColumn DVO_SRC$.OBJECT_L_H_KEY
+
+            Artifact BASE_OBJECT_F_H_KEY
+                expressedBy DVO_SRC$.OBJECT_F_H_KEY
+                    expressionRepeatedByColumn DVO_SRC$.OBJECT_F_H_KEY
+
+            Attribute BUSINESS_KEY
+                expressedBy DVO_SRC$.BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+                expressedBy DVO_SRC$.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.CONCAT_BUSINESS_KEY
+
+            //The date from the PIT that is linked to the driving table of this subselect 
+            Attribute $ SNAPSHOT__TIMESTAMP
+            Attributerepeatedbycomponent PIT$
+                expressedBy PIT_SRC$$.SNAPSHOT_TIMESTAMP
+                    expressionRepeatedByColumn PIT_SRC$$.SNAPSHOT_TIMESTAMP				
+
+            //Take only the attributes from the SAT that have been flagged by the signature attribute
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT$
+                expressedBy SAT_SRC$$$.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+        consists of source table DVO_SRC$		
+        componentrepeatedbycomponent DVO$
+
+        //Join the PIT table
+        comp_subgroup_start $ pit_join_sub
+        componentGroupConditionedBy [(TAB PIT$$ : SIGNATURE_OBJECT = PIT_DETAIL_TRANS)]
+        componentrepeatedbycomponent PIT$
+
+            consists of inner join JOIN_PIT_SRC$$
+            componentrepeatedbycomponent PIT$$
+
+                        Artifact GENERAL_EXPRESSION				
+                            expressedBy DVO_SRC$.OBJECT_H_KEY = PIT_SRC$$.OBJECT_L_H_KEY
+                            expressionconditionedby [(TAB DVO$ : DV_TYPE = HUB)]
+                            expressionRepeatedByColumn PIT_SRC$$.OBJECT_L_H_KEY
+
+                            expressedBy DVO_SRC$.OBJECT_L_H_KEY = PIT_SRC$$.OBJECT_L_H_KEY
+                            expressionconditionedby [(TAB DVO$ : DV_TYPE = LNK)]
+                            expressionRepeatedByColumn PIT_SRC$$.OBJECT_L_H_KEY
+
+            consists of joined table PIT_SRC$$
+            componentrepeatedbycomponent PIT$$
+
+            comp_subgroup_start $ SAT_SRC_SUBGROUP
+            componentsubgrouprepeatedbycomponent PITSAT$$
+
+
+                //Join the SATs linked to that PIT table
+                consists of inner join JOIN_SAT_SRC$$$
+                componentrepeatedbycomponent PITSAT$$$
+            
+                            Artifact GENERAL_EXPRESSION
+                                GROUP_1 expressedBy PIT_SRC$$.OBJECT_F_H_KEY = SAT_SRC$$$.OBJECT_H_KEY
+                                    expressionconditionedby [(TAB DVO$ : DV_TYPE = HUB)]
+                                    expressionRepeatedByColumn SAT_SRC$$$.OBJECT_H_KEY
+                                GROUP_1 expressedBy PIT_SRC$$.OBJECT_F_H_KEY = SAT_SRC$$$.OBJECT_L_H_KEY
+                                    expressionconditionedby [(TAB DVO$ : DV_TYPE = LNK)]
+                                    expressionRepeatedByColumn SAT_SRC$$$.OBJECT_L_H_KEY
+                                GROUP_2 expressedBy AND PIT_SRC$$.SAT_LOAD_TIMESTAMP = SAT_SRC$$$.TRANS_INDICATOR
+                                    expressionRepeatedByColumn SAT_SRC$$$.TRANS_INDICATOR
+                                    
+                consists of joined table SAT_SRC$$$
+                componentrepeatedbycomponent PITSAT$$$
+
+            comp_subgroup_end
+
+        comp_subgroup_end
+
+    comp_group_end
+
+    //Create the complete dataset of SNAPSHOT_DATES that must be taken into account for handling the SCD2 dimension
+    comp_group_start COMBINE_SNAPSHOTS_GROUP INL_V_GRP
+    RepeatedByObject DIMB
+
+        consists of union set COMBINE_SNAPSHOTS
+        componentrepeatedbycomponent DIMB
+    
+        comp_subgroup_start $ union_snaps
+        componentconditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)(TAB DVO$ : DV_TYPE = HUB)]
+        RepeatedByObject DVO
+
+            consists of union set COMBINE_SNAPSHOTS
+            componentrepeatedbycomponent DIMB
+        
+                Artifact BASE_OBJECT_H_KEY
+                    expressedBy DVO_BASE$.BASE_OBJECT_H_KEY
+                    expressionconditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+
+                Attribute SNAPSHOT__TIMESTAMP
+                    expressedBy DVO_BASE$.SNAPSHOT__TIMESTAMP
+                        expressionRepeatedByColumn DVO_BASE$.SNAPSHOT__TIMESTAMP	
+
+            consists of source inline_view DVO_BASE$
+            componentrepeatedbycomponent DIMB
+
+        comp_subgroup_end
+
+    comp_group_end
+
+    //Create the end_snapshot_timestamp based on the full snapshot data set 
+    comp_group_start SNAPSHOT_DATES_GROUP INL_V_GRP
+    RepeatedByObject DIMB
+
+        consists of target inline_view SNAPSHOT_DATES
+        componentrepeatedbycomponent DIMB
+    
+            Artifact BASE_OBJECT_H_KEY
+                expressedBy COMBINE_SNAPSHOTS.BASE_OBJECT_H_KEY	
+
+            Attribute SNAPSHOT__TIMESTAMP
+                expressedBy COMBINE_SNAPSHOTS.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn COMBINE_SNAPSHOTS.SNAPSHOT__TIMESTAMP	
+
+            Attribute END_SNAPSHOT__TIMESTAMP
+                expressedBy COALESCE(LEAD(COMBINE_SNAPSHOTS.SNAPSHOT__TIMESTAMP) OVER (PARTITION BY COMBINE_SNAPSHOTS.BASE_OBJECT_H_KEY	ORDER BY COMBINE_SNAPSHOTS.SNAPSHOT__TIMESTAMP),GTIMECAST[@#CURRENT_RECORD_LOAD_END_DATE#])
+
+        consists of source inline_view COMBINE_SNAPSHOTS
+        componentrepeatedbycomponent DIMB
+
+    comp_group_end
+
+    //Build the DATA_SET CTE which will contain the full dataset based on the selected fields with a HASH_DIFF field calculated which will be used later to filter out all unnecesary records
+    comp_group_start DATA_SET_GROUP INL_V_GRP
+	componentgrouprepeatedbycomponent DIMB
+
+        consists of target inline_view DATA_SET
+        RepeatedByObject DIMB
+
+            Artifact $ BASE_OBJECT_H_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy DVO_BASE$.BASE_OBJECT_H_KEY
+                expressionRepeatedByColumn DVO_SRC$.OBJECT_H_KEY
+                    
+            Attribute $ BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy DVO_BASE$.BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy DVO_BASE$.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.CONCAT_BUSINESS_KEY
+
+            Attribute $ SNAPSHOT__TIMESTAMP
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy DVO_BASE$.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn DVO_BASE$.SNAPSHOT__TIMESTAMP				
+
+            Attribute END_SNAPSHOT__TIMESTAMP
+
+                expressedBy SNAPSHOT_DATES.END_SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn SNAPSHOT_DATES.END_SNAPSHOT__TIMESTAMP	
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+
+                expressedBy DVO_BASE$.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+
+            //Create the HASH_DIFF field, a contatenation of all content fields that have been selected for usage in the implementation of the template on a certain BRIDGE
+            ArtifactPart DIM_HASH_DIFF
+
+                GROUP_1 expressedBy HASHFUNC[
+
+            ArtifactPart $ DIM_HASH_DIFF
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                GROUP_2 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[DVO_BASE$.BASE_OBJECT_H_KEY]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn DVO_SRC$.OBJECT_H_KEY VERTICAL
+
+            ArtifactPart $ DIM_HASH_DIFF
+            Attributerepeatedbycomponent PITSAT
+
+                GROUP_3 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[DVO_BASE$.DIM_ATTRIBUTE]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE VERTICAL
+
+            ArtifactPart DIM_HASH_DIFF
+
+                GROUP_4 expressedBy HASHFUNC]
+
+        consists of source table BRIDGE_SRC
+        RepeatedByObject BRIDGE
+
+		comp_subgroup_start $ JOIN_DVO_BASE_SUBGROUP
+        expressionconditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+		componentsubgrouprepeatedbycomponent DVO
+
+            consists of inner join JOIN_SNAPSHOT_DATES
+            componentrepeatedbycomponent DIMB
+
+                Artifact GENERAL_EXPRESSION				
+                    expressedBy BRIDGE_SRC.OBJECT_H_KEY$ = SNAPSHOT_DATES.BASE_OBJECT_H_KEY
+                    expressionRepeatedByColumn BRIDGE_SRC.OBJECT_H_KEY$
+
+            consists of joined inline_view SNAPSHOT_DATES
+            componentrepeatedbycomponent DIMB
+
+        comp_subgroup_end
+
+		comp_subgroup_start $ JOIN_DVO_BASE_SUBGROUP
+		componentsubgrouprepeatedbycomponent DVO
+
+            consists of inner join JOIN_DVO_BASE$
+            componentrepeatedbycomponent DVO$
+
+                Artifact GENERAL_EXPRESSION				
+                    GROUP_1 expressedBy BRIDGE_SRC.OBJECT_H_KEY$ = DVO_BASE$.BASE_OBJECT_H_KEY
+                    expressionconditionedby [(TAB DVO$ : DV_TYPE = HUB)]
+                    expressionRepeatedByColumn BRIDGE_SRC.OBJECT_H_KEY$
+                    GROUP_1 expressedBy BRIDGE_SRC.OBJECT_L_H_KEY$ = DVO_BASE$.BASE_OBJECT_L_H_KEY
+                    expressionconditionedby [(TAB DVO$ : DV_TYPE = LNK LND NHL LNA)]
+                    expressionRepeatedByColumn BRIDGE_SRC.OBJECT_L_H_KEY$
+                    GROUP_2 expressedBy AND DVO_BASE$.SNAPSHOT__TIMESTAMP = SNAPSHOT_DATES.SNAPSHOT__TIMESTAMP
+                    expressionconditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+                    expressionRepeatedByColumn DVO_BASE$.SNAPSHOT__TIMESTAMP
+                    GROUP_2 expressedBy AND DVO_BASE$.SNAPSHOT__TIMESTAMP >= SNAPSHOT_DATES.SNAPSHOT__TIMESTAMP AND DVO_BASE$.SNAPSHOT__TIMESTAMP < SNAPSHOT_DATES.END_SNAPSHOT__TIMESTAMP
+                    expressionconditionedby [(TAB DVO$ : SIGNATURE_OBJECT != MAIN_HUB)]
+                    expressionRepeatedByColumn DVO_BASE$.SNAPSHOT__TIMESTAMP
+
+            consists of joined inline_view DVO_BASE$
+            componentrepeatedbycomponent DVO$
+
+        comp_subgroup_end
+        
+	comp_group_end
+
+    //A subselect, created to flag those records that should be filtered
+    comp_group_start HASH_DIFF_DATA_SET_GROUP INL_V_GRP
+	componentgrouprepeatedbycomponent DIMB
+
+        consists of target inline_view HASH_DIFF_DATA_SET
+        RepeatedByObject DIMB
+
+            Artifact BASE_OBJECT_H_KEY
+
+                expressedBy DATA_SET.BASE_OBJECT_H_KEY
+
+            Attribute $ BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy DATA_SET.BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy DATA_SET.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.CONCAT_BUSINESS_KEY
+
+            Attribute SNAPSHOT__TIMESTAMP
+                expressedBy DATA_SET.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn DATA_SET.SNAPSHOT__TIMESTAMP				
+
+            Attribute END_SNAPSHOT__TIMESTAMP
+                expressedBy DATA_SET.END_SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn DATA_SET.END_SNAPSHOT__TIMESTAMP
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+            
+            Artifact CHANGE_FLAG
+                expressedBy CASE WHEN COALESCE(LEAD( DATA_SET.DIM_HASH_DIFF )OVER( PARTITION BY DATA_SET.BASE_OBJECT_H_KEY ORDER BY DATA_SET.SNAPSHOT__TIMESTAMP),#XXX#) != DATA_SET.DIM_HASH_DIFF THEN 1 ELSE 0 END
+
+        consists of source inline_view DATA_SET
+        RepeatedByObject DIMB
+        
+	comp_group_end
+
+
+    //A subselect, created to filter out those records
+    comp_group_start FILTERED_DATA_SET_GROUP INL_V_GRP
+	componentgrouprepeatedbycomponent DIMB
+
+        consists of target inline_view FILTERED_DATA_SET
+        RepeatedByObject DIMB
+
+            Attribute $ OBJECT_H_KEY$
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy HASH_DIFF_DATA_SET.BASE_OBJECT_H_KEY
+                    expressionRepeatedByColumn DVO_SRC$.OBJECT_H_KEY
+
+            Attribute $ BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy HASH_DIFF_DATA_SET.BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy HASH_DIFF_DATA_SET.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.CONCAT_BUSINESS_KEY
+
+            Attribute SNAPSHOT__TIMESTAMP
+                expressedBy HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP				
+
+            Attribute END_SNAPSHOT__TIMESTAMP
+                expressedBy HASH_DIFF_DATA_SET.END_SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.END_SNAPSHOT__TIMESTAMP
+
+            Attribute $ DIM_ATTRIBUTE
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            Attributerepeatedbycomponent PITSAT
+                expressedBy HASH_DIFF_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy HASH_DIFF_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+        consists of source inline_view HASH_DIFF_DATA_SET
+        RepeatedByObject DIMB
+
+        consists of filter FILTER_HASH_DIFF_DATA_SET
+
+                Artifact GENERAL_EXPRESSION
+                    expressedBy HASH_DIFF_DATA_SET.CHANGE_FLAG = 1
+        
+	comp_group_end
+
+    //The final select for the view with a recalculation of the end_timestamp to ensure matching records for the filtered out records
+    comp_group_start INS_GROUP INS_GRP
+	componentgrouprepeatedbycomponent DIMB
+
+        consists of target table DIM_TGT
+        RepeatedByObject DIMB
+
+            //Create the dimension_KEY field, a HASH based on a concatenation of the MAIN_HUB-hkey and the timestamp of the record 
+            ArtifactPart DIMENSION_KEY
+
+                GROUP_1 expressedBy HASHFUNC[
+
+            ArtifactPart $ DIMENSION_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                GROUP_2 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[FILTERED_DATA_SET.BUSINESS_KEY]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY VERTICAL
+
+            ArtifactPart $ DIMENSION_KEY
+
+                GROUP_3 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP VERTICAL
+
+
+            ArtifactPart DIMENSION_KEY
+
+                GROUP_4 expressedBy HASHFUNC]
+
+            Attribute $ OBJECT_H_KEY$
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy FILTERED_DATA_SET.OBJECT_H_KEY
+                    expressionRepeatedByColumn DVO_SRC$.OBJECT_H_KEY
+
+            Attribute $ BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy FILTERED_DATA_SET.BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            RepeatedByObject DVO
+
+                expressedBy FILTERED_DATA_SET.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_SRC$.CONCAT_BUSINESS_KEY
+
+            Attribute SNAPSHOT__TIMESTAMP
+                expressedBy FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP				
+
+            Attribute END_SNAPSHOT__TIMESTAMP
+                expressedBy COALESCE(LEAD(FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP) OVER (PARTITION BY FILTERED_DATA_SET.OBJECT_H_KEY	ORDER BY FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP),GTIMECAST[@#CURRENT_RECORD_LOAD_END_DATE#])
+
+            Attribute $ DIM_ATTRIBUTE
+            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
+            Attributerepeatedbycomponent PITSAT
+                expressedBy FILTERED_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy FILTERED_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+        consists of source inline_view FILTERED_DATA_SET
+        RepeatedByObject DIMB
+
+        
+	comp_group_end

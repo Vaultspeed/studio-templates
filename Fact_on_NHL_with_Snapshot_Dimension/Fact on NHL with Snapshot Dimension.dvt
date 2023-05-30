@@ -1,0 +1,123 @@
+Template FACT_NHL_SNAP
+
+	//create a inline view select from the NHL
+	comp_group_start MIV_GROUP INL_V_GRP
+	componentgrouprepeatedbycomponent FACT_NHL_SNAP 
+
+		//define that this is an aggregated select
+		consists of aggregated inline_view MIV
+		componentrepeatedbycomponent FACT_NHL_SNAP
+                    
+
+                    //Create the DIM_<entity>_HKEY field, a HASH based on a concatenation of the MAIN_HUB-hkey and the timestamp of the record 
+                    AttributePart $ DIM_OBJECT_H_KEY$
+                    RepeatedByObject MAIN_HUB_FK
+
+                        GROUP_1 expressedBy HASHFUNC[
+
+                    AttributePart $ DIM_OBJECT_H_KEY$
+                    RepeatedByObject MAIN_HUB_FK
+
+                        GROUP_2 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[NHL_SRC.OBJECT_F_H_KEY$]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                            expressionRepeatedByColumn NHL_SRC.OBJECT_F_H_KEY$ VERTICAL
+
+                    AttributePart $ DIM_OBJECT_H_KEY$
+                    RepeatedByObject MAIN_HUB_FK
+
+                        GROUP_3 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[DATE_TRUNC(#DAY#,NHL_SRC.START_TIME) ]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                            expressionRepeatedByColumn NHL_SRC.START_TIME VERTICAL
+
+
+                    AttributePart $ DIM_OBJECT_H_KEY$
+                    RepeatedByObject MAIN_HUB_FK
+
+                        GROUP_4 expressedBy HASHFUNC]
+
+
+					//All HUB HKEY fields from the NHL
+                    Attribute OBJECT_F_H_KEY
+						expressedBy NHL_SRC.OBJECT_F_H_KEY
+						expressionRepeatedByColumn NHL_SRC.OBJECT_F_H_KEY     
+
+					//Calculate the day as the lowest level of aggregation
+                    Attribute TRANSACTION_DAY
+                        expressedBy DATE_TRUNC(#DAY#,NHL_SRC.START_TIME)
+					
+					//Calculate the transaction duration based on the start and end time
+					Aggregated Attribute TRANSACTION_DURATION
+						expressedBy avg(timediff(minutes,NHL_SRC.START_TIME,NHL_SRC.END_TIME))
+					
+					//Calculate the transaction duration based on the secundary start and end time only way to enable calculation of multiple durations
+                    Aggregated Attribute SECONDARY_TRANSACTION_DURATION
+						expressedBy avg(timediff(minutes,NHL_SRC.SEC_START_TIME,NHL_SRC.SEC_END_TIME))
+					
+					//Calculate the aggregated value of the number of transactions based on the SA UNIQUE_IDENTIFIER
+                    Aggregated Attribute NUMBER_OF_TRANSACTIONS
+                        expressedBy count(distinct NHL_SRC.UNIQUE_IDENTIFIER)
+
+					//Calculate the aggregated SUM value based on the fields tagged with SA TRANSACTION_METRIC_SUMMABLE
+                    Aggregated Attribute SUM_OF_TRANSACTION_METRIC_SUMMABLE
+                        expressedBy SUM(NHL_SRC.TRANSACTION_METRIC_SUMMABLE)
+                        expressionRepeatedByColumn NHL_SRC.TRANSACTION_METRIC_SUMMABLE
+
+					//Calculate the aggregated Average value based on the fields tagged with SA TRANSACTION_METRIC_AVG
+                    Aggregated Attribute AVG_TRANSACTION_METRIC_AVG
+                        expressedBy AVG(NHL_SRC.TRANSACTION_METRIC_AVG)
+                        expressionRepeatedByColumn NHL_SRC.TRANSACTION_METRIC_AVG
+
+						
+        consists of source table NHL_SRC
+        componentrepeatedbycomponent NHL
+
+	comp_group_end
+	
+	//Define the final structure of the select of the view
+	comp_group_start INSERT_END_GROUP INS_GRP
+	componentgrouprepeatedbycomponent FACT_NHL_SNAP
+
+		consists of target table FACT_NHL_SNAP_TGT
+		componentrepeatedbycomponent FACT_NHL_SNAP
+
+				    //in this template this is a repeat of the upper part, where this select there is no real calculation done anymore
+                    //list the Dimension KEYs
+                    Attribute $ DIM_OBJECT_H_KEY$
+                    RepeatedByObject MAIN_HUB_FK
+						expressedBy MIV.DIM_OBJECT_H_KEY$
+						expressionRepeatedByColumn MIV.DIM_OBJECT_H_KEY$
+
+                    //list the HKEYs
+                    Attribute OBJECT_F_H_KEY
+						expressedBy MIV.OBJECT_F_H_KEY
+						expressionRepeatedByColumn MIV.OBJECT_F_H_KEY
+
+                    Attribute TRANSACTION_DAY
+						expressedBy MIV.TRANSACTION_DAY
+						expressionRepeatedByColumn MIV.TRANSACTION_DAY
+
+					Attribute TRANSACTION_DURATION
+						expressedBy MIV.TRANSACTION_DURATION
+						expressionRepeatedByColumn MIV.TRANSACTION_DURATION
+
+                    Attribute SECONDARY_TRANSACTION_DURATION
+						expressedBy MIV.SECONDARY_TRANSACTION_DURATION
+						expressionRepeatedByColumn MIV.SECONDARY_TRANSACTION_DURATION
+
+                    Attribute NUMBER_OF_TRANSACTIONS
+						expressedBy MIV.NUMBER_OF_TRANSACTIONS
+                        expressionRepeatedByColumn MIV.NUMBER_OF_TRANSACTIONS
+
+                     Attribute SUM_OF_TRANSACTION_METRIC_SUMMABLE
+						expressedBy MIV.SUM_OF_TRANSACTION_METRIC_SUMMABLE
+                        expressionRepeatedByColumn MIV.SUM_OF_TRANSACTION_METRIC_SUMMABLE
+
+                    Attribute AVG_TRANSACTION_METRIC_AVG
+						expressedBy MIV.AVG_TRANSACTION_METRIC_AVG
+                        expressionRepeatedByColumn MIV.AVG_TRANSACTION_METRIC_AVG	
+
+
+        consists of source inline_view MIV
+        componentrepeatedbycomponent FACT_NHL_SNAP
+
+	comp_group_end
+
+    

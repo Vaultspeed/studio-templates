@@ -1,0 +1,127 @@
+Template FACT
+//Template that creates a fact based on a bridge table
+//Selecting all dimensions based on all hubs in the bridge
+//selecting all fields from the tagged SAT 
+
+//Start building the subselects for each DIMENSION that is required from the setup
+    comp_group_start $ DVO_BASE_GROUP$ INL_V_GRP
+	componentGroupRepeatedByComponent FACT_ON_BRIDGE_SCD2_DIM_SELECTION
+
+        //For each table take the specific attributes
+        consists of target inline_view DVO_BASE$
+        componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2
+    
+            //HUB HKEY
+            Artifact BASE_OBJECT_H_KEY
+                expressedBy DVO_SRC$.OBJECT_H_KEY
+                    expressionRepeatedByColumn DVO_SRC$.OBJECT_H_KEY
+
+            //DIMENSION_KEY
+            Attribute DIM_OBJECT_H_KEY
+                expressedBy SCD2_DIM_HUB_SRC$.DIM_OBJECT_H_KEY
+                    expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.DIM_OBJECT_H_KEY				
+
+            //The date from the DIM that is linked to the driving table of this subselect 
+            Artifact FILTER_SNAPSHOT_TIMESTAMP
+                expressedBy SCD2_DIM_HUB_SRC$.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.SNAPSHOT__TIMESTAMP				
+
+            //The date from the DIM that is linked to the driving table of this subselect 
+            Artifact FILTER_END_SNAPSHOT_TIMESTAMP
+                expressedBy SCD2_DIM_HUB_SRC$.END_SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.END_SNAPSHOT__TIMESTAMP				
+
+
+        consists of source table DVO_SRC$		
+        componentrepeatedbycomponent DVO$
+
+		//JOIN to the dimension table
+        comp_subgroup_start dim_join_sub
+        componentGroupConditionedBy [(TAB SCD2_DIM_HUB$ : SIGNATURE_OBJECT = SCD2_DIM_HUB)]
+        componentrepeatedbycomponent SCD2_DIM_HUB$
+
+            consists of inner join JOIN_SCD2_DIM_HUB_SRC$
+            componentrepeatedbycomponent SCD2_DIM_HUB$
+
+				Artifact GENERAL_EXPRESSION				
+					expressedBy DVO_SRC$.OBJECT_H_KEY = SCD2_DIM_HUB_SRC$.OBJECT_H_KEY
+					expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.OBJECT_H_KEY
+
+            consists of joined table SCD2_DIM_HUB_SRC$
+            componentrepeatedbycomponent SCD2_DIM_HUB$
+        comp_subgroup_end
+
+    comp_group_end
+
+//create the final select 
+//selecting from the bridge, adding the selected SAT table, lookups of the dimension values
+	comp_group_start INSERT_END_GROUP INS_GRP
+	componentgrouprepeatedbycomponent FACT_ON_BRIDGE_SCD2
+
+		consists of target table FACT_BRIDGE_SCD2_TGT
+		componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2
+                   
+                    //Add the dimension key
+                    Attribute $ DIM_OBJECT_H_KEY
+                    AttributeRepeatedBycomponent FACT_ON_BRIDGE_SCD2_DIM_SELECTION
+
+                        expressedBy DVO_BASE$.DIM_OBJECT_H_KEY$
+                        expressionRepeatedByColumn DVO_BASE$.DIM_OBJECT_H_KEY$
+
+                    //Add the fields known as BUSINESS_SRC_KEY
+                    //To ensure to enable the count on the Business key of the SAT who is driving the data selection
+                    Attribute $ BUSINESS_SRC_KEY
+                    AttributeRepeatedBycomponent FACT_ON_BRIDGE_SCD2_SAT_SELECTION
+						expressedBy FACT_ON_BRIDGE_SCD2_SAT_SELECTION.BUSINESS_SRC_KEY
+						expressionRepeatedByColumn FACT_ON_BRIDGE_SCD2_SAT_SELECTION.BUSINESS_SRC_KEY
+
+                    //Add the fields known as FOREIGN_KEY
+                    Attribute $ FOREIGN_KEY
+                    AttributeRepeatedBycomponent FACT_ON_BRIDGE_SCD2_SAT_SELECTION
+						expressedBy FACT_ON_BRIDGE_SCD2_SAT_SELECTION.FOREIGN_KEY
+						expressionRepeatedByColumn FACT_ON_BRIDGE_SCD2_SAT_SELECTION.FOREIGN_KEY
+
+                    //Add the fields known as OTHER_ATTR
+                    Attribute $ OTHER_ATTR
+                    AttributeRepeatedBycomponent FACT_ON_BRIDGE_SCD2_SAT_SELECTION
+						expressedBy FACT_ON_BRIDGE_SCD2_SAT_SELECTION.OTHER_ATTR
+						expressionRepeatedByColumn FACT_ON_BRIDGE_SCD2_SAT_SELECTION.OTHER_ATTR
+
+
+        consists of source table BRIDGE
+        componentrepeatedbycomponent BRIDGE
+
+		//JOIN to the fact sat based on the usage of the Signature Object FACT_ON_BRIDGE_SCD2_SAT_SELECTION
+        comp_subgroup_start $ fact_sat_sub
+        componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2_SAT_SELECTION
+
+            consists of inner join JOIN_FACT_ON_BRIDGE_SCD2_SAT_SELECTION
+            componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2_SAT_SELECTION$$
+
+				Artifact GENERAL_EXPRESSION				
+					expressedBy FACT_ON_BRIDGE_SCD2_SAT_SELECTION.OBJECT_H_KEY = BRIDGE.OBJECT_H_KEY$
+
+            consists of joined table FACT_ON_BRIDGE_SCD2_SAT_SELECTION
+            componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2_SAT_SELECTION$$
+            
+        comp_subgroup_end
+
+		//JOIN to the base cte, for each hub, tagged with SO: FACT_ON_BRIDGE_SCD2_DIM_SELECTION
+        comp_subgroup_start $ base_join_sub
+        componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2_DIM_SELECTION
+
+            consists of inner join JOIN_DVO_BASE$
+            componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2
+
+				Artifact GENERAL_EXPRESSION				
+
+					GROUP_1 expressedBy DVO_BASE$.BASE_OBJECT_H_KEY = BRIDGE.OBJECT_H_KEY$ 
+                    GROUP_2 expressedBy AND FACT_ON_BRIDGE_SCD2_SAT_SELECTION.FACT_ON_BRIDGE_SCD2_TIME_FIELD > DVO_BASE$.FILTER_SNAPSHOT_TIMESTAMP AND FACT_ON_BRIDGE_SCD2_SAT_SELECTION.FACT_ON_BRIDGE_SCD2_TIME_FIELD <= DVO_BASE$.FILTER_END_SNAPSHOT_TIMESTAMP
+                            expressionRepeatedByColumn FACT_ON_BRIDGE_SCD2_SAT_SELECTION.FACT_ON_BRIDGE_SCD2_TIME_FIELD AND
+
+            consists of joined inline_view DVO_BASE$
+            componentrepeatedbycomponent FACT_ON_BRIDGE_SCD2
+
+        comp_subgroup_end
+
+	comp_group_end
