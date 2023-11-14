@@ -1,0 +1,25 @@
+Template SAT_CALC
+	
+    comp_group_start DDL_GROUP CREA_GRP
+	componentGroupRepeatedByComponent CSAT
+
+		consists of CREATE_TABLE table SAT_CALC_TGT
+		componentrepeatedbycomponent CSAT
+
+		Attribute OBJECT_H_KEY
+			
+		Attribute LOAD_TIMESTAMP
+			
+		Attribute LOAD_CYCLE_ID
+			
+		Attribute HASH_DIFF
+			
+		Attribute DELETE_FLAG
+
+		Attribute BUSINESS_SRC_KEY
+			
+		Attribute PRIMARY_KEY
+
+        Attribute NUMBER_OF_YEARS_SINCE_START_DATE
+			
+	comp_group_end

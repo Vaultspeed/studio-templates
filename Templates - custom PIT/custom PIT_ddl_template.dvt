@@ -1,0 +1,29 @@
+Template POINT_IN_TIME
+	
+    comp_group_start DDL_GROUP CREA_GRP
+	componentGroupRepeatedByComponent CPIT
+
+		consists of CREATE_TABLE table PIT_TGT
+		componentrepeatedbycomponent CPIT
+ 
+            Attribute PIT_HKEY
+
+            Attribute OBJECT_H_KEY
+
+            Attribute SNAPSHOT_DATE				
+
+            Attribute END_SNAPSHOT_DATE
+
+            Attribute SAT_OBJECT_H_KEY
+
+            Attribute $ SAT_OBJECT_H_KEY_CALC$
+            repeatedbyobject CSAT
+
+            Attribute LOAD_TIMESTAMP
+
+            Attribute $ LOAD_TIMESTAMP_CALC$
+            repeatedbyobject CSAT
+
+// Add the CSAT HKEY and DATE -- how does the generator know from the code above that the SATs linked to the HUB must be used?
+	
+	comp_group_end

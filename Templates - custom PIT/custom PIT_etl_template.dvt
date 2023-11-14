@@ -1,0 +1,262 @@
+Template POINT_IN_TIME
+
+comp_group_start SNAPSHOTDATES_GROUP INL_V_GRP
+componentGroupRepeatedByComponent CPIT
+
+	comp_subgroup_start $ SNAPSHOTDATES
+	componentsubgrouprepeatedbycomponent SAT
+
+        consists of UNION set SSDV_TGT
+        componentrepeatedbycomponent CPIT
+        With Integrationtype distinsert
+
+            Artifact HUB_HKEY
+                expressedBy SAT_SRC$.OBJECT_H_KEY
+                    expressionRepeatedByColumn SAT_SRC$.OBJECT_H_KEY
+
+            Attribute SNAPSHOT_DATE
+                expressedBy SAT_SRC$.LOAD_TIMESTAMP
+                expressionRepeatedByColumn SAT_SRC$.LOAD_TIMESTAMP
+
+        consists of source table SAT_SRC$
+        componentrepeatedbycomponent SAT$
+
+        consists of UNION set SSDV_TGT
+        componentrepeatedbycomponent CPIT
+        With Integrationtype distinsert
+
+            Artifact HUB_HKEY
+                expressedBy CSAT_SRC$.OBJECT_H_KEY
+                    expressionRepeatedByColumn CSAT_SRC$.OBJECT_H_KEY
+
+            Attribute SNAPSHOT_DATE
+                expressedBy CSAT_SRC$.LOAD_TIMESTAMP
+                expressionRepeatedByColumn CSAT_SRC$.LOAD_TIMESTAMP
+
+        consists of source table CSAT_SRC$
+        componentrepeatedbycomponent CSAT$
+
+
+	comp_subgroup_end
+
+comp_group_end
+
+comp_group_start $ SAT_TGT_GROUP$ INL_V_GRP
+componentGroupRepeatedByComponent SAT
+
+	consists of target inline_view SAT_TGT$
+	componentrepeatedbycomponent SAT$
+
+        Attribute OBJECT_H_KEY
+            expressedBy SAT_SRC$.OBJECT_H_KEY
+            expressionRepeatedByColumn SAT_SRC$.OBJECT_H_KEY
+        
+        Attribute LOAD_TIMESTAMP
+            expressedBy SAT_SRC$.LOAD_TIMESTAMP
+            expressionRepeatedByColumn SAT_SRC$.LOAD_TIMESTAMP
+
+        Artifact ENDING_LOAD_TIMESTAMP
+            expressedBy COALESCE(LEAD(SAT_SRC$.LOAD_TIMESTAMP) OVER (PARTITION BY SAT_SRC$.OBJECT_H_KEY ORDER BY SAT_SRC$.LOAD_TIMESTAMP),GTIMECAST[@#CURRENT_RECORD_LOAD_END_DATE#])
+            expressionRepeatedByColumn SAT_SRC$.LOAD_TIMESTAMP					
+
+	consists of source table SAT_SRC$
+	componentrepeatedbycomponent SAT$
+comp_group_end
+
+
+comp_group_start $ SAT_TGT_GROUP$ INL_V_GRP
+componentGroupRepeatedByComponent CSAT
+
+	consists of target inline_view CSAT_TGT$
+	componentrepeatedbycomponent CSAT$
+
+        Attribute OBJECT_H_KEY
+            expressedBy CSAT_SRC$.OBJECT_H_KEY
+            expressionRepeatedByColumn CSAT_SRC$.OBJECT_H_KEY
+        
+        Attribute LOAD_TIMESTAMP
+            expressedBy CSAT_SRC$.LOAD_TIMESTAMP
+            expressionRepeatedByColumn CSAT_SRC$.LOAD_TIMESTAMP
+
+        Artifact ENDING_LOAD_TIMESTAMP
+            expressedBy COALESCE(LEAD(CSAT_SRC$.LOAD_TIMESTAMP) OVER (PARTITION BY CSAT_SRC$.OBJECT_H_KEY ORDER BY CSAT_SRC$.LOAD_TIMESTAMP),GTIMECAST[@#CURRENT_RECORD_LOAD_END_DATE#])
+            expressionRepeatedByColumn CSAT_SRC$.LOAD_TIMESTAMP					
+
+	consists of source table CSAT_SRC$
+	componentrepeatedbycomponent CSAT$
+
+comp_group_end
+
+
+comp_group_start $ PIT_CHECK_GROUP INL_V_GRP
+componentGroupRepeatedByComponent CPIT
+
+	consists of target inline_view PIT_CHECK
+	componentrepeatedbycomponent CPIT
+
+        Attribute OBJECT_H_KEY
+            expressedBy PIT_TGT.OBJECT_H_KEY
+            expressionRepeatedByColumn PIT_TGT.OBJECT_H_KEY
+        
+        Attribute SNAPSHOT_DATE
+            expressedBy PIT_TGT.SNAPSHOT_DATE
+            expressionRepeatedByColumn PIT_TGT.SNAPSHOT_DATE
+
+	consists of source table PIT_TGT
+	componentrepeatedbycomponent CPIT
+
+comp_group_end
+
+comp_group_start MAIN_GROUP INS_GRP
+componentGroupRepeatedByComponent CPIT
+
+	consists of target table PIT_TGT
+	componentrepeatedbycomponent CPIT
+ 
+		Attribute PIT_HKEY
+			GROUP_1 expressedBy HASHFUNC[ 
+			GROUP_2 expressedBy HUB_SRC.OBJECT_H_KEY || @#HASHKEY_DELIMITER# ||
+				expressionRepeatedByColumn HUB_SRC.OBJECT_H_KEY
+			GROUP_3 expressedBy CHARCASTFRMTMAX[SSDV_TGT.SNAPSHOT_DATE]
+				expressionRepeatedByColumn SSDV_TGT.SNAPSHOT_DATE 
+			GROUP_4 expressedBy HASHFUNC]
+
+		Attribute OBJECT_H_KEY
+			expressedBy HUB_SRC.OBJECT_H_KEY
+				expressionRepeatedByColumn HUB_SRC.OBJECT_H_KEY
+
+		Attribute SNAPSHOT_DATE
+			expressedBy SSDV_TGT.SNAPSHOT_DATE
+				expressionRepeatedByColumn SSDV_TGT.SNAPSHOT_DATE
+
+		Attribute END_SNAPSHOT_DATE
+			expressedBy COALESCE(LEAD(SSDV_TGT.SNAPSHOT_DATE) OVER (PARTITION BY HUB_SRC.OBJECT_H_KEY ORDER BY SSDV_TGT.SNAPSHOT_DATE),GTIMECAST[@#CURRENT_RECORD_LOAD_END_DATE#])
+				expressionRepeatedByColumn SSDV_TGT.SNAPSHOT_DATE		
+
+		Attribute $ SAT_OBJECT_H_KEY
+		attributerepeatedbycomponent SAT
+			expressedBy COALESCE(SAT_TGT$.OBJECT_H_KEY,UNSAT_TGT$.OBJECT_H_KEY)
+				expressionRepeatedByColumn SAT_TGT$.OBJECT_H_KEY
+        
+        Attribute $ SAT_OBJECT_H_KEY_CALC$
+        attributerepeatedbycomponent CSAT
+			expressedBy COALESCE(CSAT_TGT$.OBJECT_H_KEY,CUNSAT_TGT$.OBJECT_H_KEY)
+				expressionRepeatedByColumn CSAT_TGT$.OBJECT_H_KEY
+                
+		Attribute $ LOAD_TIMESTAMP
+		attributerepeatedbycomponent SAT
+			expressedBy COALESCE(SAT_TGT$.LOAD_TIMESTAMP,UNSAT_TGT$.LOAD_TIMESTAMP)
+				expressionRepeatedByColumn SAT_TGT$.LOAD_TIMESTAMP
+
+		Attribute $ LOAD_TIMESTAMP_CALC
+		attributerepeatedbycomponent CSAT
+			expressedBy COALESCE(CSAT_TGT$.LOAD_TIMESTAMP,CUNSAT_TGT$.LOAD_TIMESTAMP)
+				expressionRepeatedByColumn CSAT_TGT$.LOAD_TIMESTAMP
+
+	consists of source table HUB_SRC
+	componentrepeatedbycomponent HUB		
+
+	consists of inner join JOIN_SSDV_TGT		
+	componentrepeatedbycomponent CPIT
+
+        Artifact GENERAL_EXPRESSION				
+            expressedBy SSDV_TGT.HUB_HKEY = HUB_SRC.OBJECT_H_KEY
+                expressionRepeatedByColumn SSDV_TGT.OBJECT_H_KEY		
+
+	consists of joined inline_view SSDV_TGT		
+	componentrepeatedbycomponent CPIT
+
+    consists of left_outer join JOIN_PIT		
+	componentrepeatedbycomponent CPIT
+
+        Artifact GENERAL_EXPRESSION				
+            expressedBy PIT_CHECK.OBJECT_H_KEY = HUB_SRC.OBJECT_H_KEY AND SSDV_TGT.SNAPSHOT_DATE = PIT_CHECK.SNAPSHOT_DATE
+
+	consists of joined inline_view PIT_CHECK	
+	componentrepeatedbycomponent CPIT
+			
+        comp_subgroup_start $ SAT_TGT_SUBGROUP
+	    componentsubgrouprepeatedbycomponent SAT
+
+            consists of left_outer join JOIN_SAT_TGT$
+            componentrepeatedbycomponent SAT$
+        
+                Artifact GENERAL_EXPRESSION
+                    expressedBy HUB_SRC.OBJECT_H_KEY = SAT_TGT$.OBJECT_H_KEY AND SSDV_TGT.SNAPSHOT_DATE >= SAT_TGT$.LOAD_TIMESTAMP AND SSDV_TGT.SNAPSHOT_DATE < SAT_TGT$.ENDING_LOAD_TIMESTAMP
+
+            consists of joined inline_view SAT_TGT$
+            componentrepeatedbycomponent  SAT$
+
+	    comp_subgroup_end
+
+        comp_subgroup_start $ SAT_TGT_SUBGROUP$
+	    componentsubgrouprepeatedbycomponent CSAT
+
+            consists of left_outer join JOIN_CSAT_TGT$
+            componentrepeatedbycomponent CSAT$
+        
+                Artifact GENERAL_EXPRESSION
+                    expressedBy HUB_SRC.OBJECT_H_KEY = CSAT_TGT$.OBJECT_H_KEY AND SSDV_TGT.SNAPSHOT_DATE >= CSAT_TGT$.LOAD_TIMESTAMP AND SSDV_TGT.SNAPSHOT_DATE < CSAT_TGT$.ENDING_LOAD_TIMESTAMP
+
+            consists of joined inline_view CSAT_TGT$
+            componentrepeatedbycomponent  CSAT$
+
+	    comp_subgroup_end
+
+    comp_subgroup_start MEX_SUBGROUP
+	componentsubgrouprepeatedbycomponent MEX
+	
+	consists of inner join JOIN_MEX_SRC		
+	componentrepeatedbycomponent MEX
+
+        Artifact GENERAL_EXPRESSION				
+            expressedBy MEX_SRC.RECORD_TYPE = @#UNKNOWN_RECORD_TYPE#
+                expressionRepeatedByColumn MEX_SRC.RECORD_TYPE  
+
+	consists of joined table MEX_SRC		
+	componentrepeatedbycomponent MEX
+	
+	comp_subgroup_end
+			
+    comp_subgroup_start $ UNSAT_TGT_SUBGROUP
+	componentsubgrouprepeatedbycomponent SAT
+
+		consists of inner join JOIN_UNSAT_TGT$
+		componentrepeatedbycomponent SAT$
+	
+            Artifact GENERAL_EXPRESSION
+                expressedBy INTCAST[MEX_SRC.LOAD_CYCLE_ID] = UNSAT_TGT$.LOAD_CYCLE_ID
+                expressionRepeatedByColumn MEX_SRC.LOAD_CYCLE_ID
+
+		consists of joined table UNSAT_TGT$
+		componentrepeatedbycomponent  SAT$
+
+	comp_subgroup_end
+
+    comp_subgroup_start $ CUNSAT_TGT_SUBGROUP
+	componentsubgrouprepeatedbycomponent CSAT
+
+		consists of inner join JOIN_CUNSAT_TGT$
+		componentrepeatedbycomponent CSAT$
+	
+            Artifact GENERAL_EXPRESSION
+                expressedBy INTCAST[MEX_SRC.LOAD_CYCLE_ID] = CUNSAT_TGT$.LOAD_CYCLE_ID
+                expressionRepeatedByColumn MEX_SRC.LOAD_CYCLE_ID
+
+		consists of joined table CUNSAT_TGT$
+		componentrepeatedbycomponent  CSAT$
+
+	comp_subgroup_end
+
+    comp_subgroup_start  FILTER_PIT_CHECK_SUBGROUP
+    componentrepeatedbycomponent CPIT
+       
+       consists of filter FILTER_PIT_CHECK
+       componentrepeatedbycomponent CPIT
+
+			Artifact GENERAL_EXPRESSION
+				expressedBy PIT_CHECK.OBJECT_H_KEY is null
+
+    comp_subgroup_end  			
+
+comp_group_end

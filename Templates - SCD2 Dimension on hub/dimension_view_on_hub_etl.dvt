@@ -1,0 +1,253 @@
+
+//Template to create a SCD2 dimension based on a HUB, all fields flagged with DIM_ATTRIBUTE on the SATs will be used in the dimension, versions will be reduced
+
+Template DIMENSION
+
+//Start building the subselects for each HUB and LNK from the BRIDGE table
+
+    comp_group_start DVO_BASE_GROUP INL_V_GRP
+    componentgrouprepeatedbycomponent SCD2_DIM_HUB
+
+        //For each table take the specific attributes
+        consists of target inline_view DVO_BASE
+        componentrepeatedbycomponent SCD2_DIM_HUB
+    
+            Artifact BASE_OBJECT_H_KEY
+                expressedBy HUB_SRC.OBJECT_H_KEY
+                    expressionRepeatedByColumn HUB_SRC.OBJECT_H_KEY
+
+            Attribute BUSINESS_KEY
+                expressedBy HUB_SRC.BUSINESS_KEY
+                    expressionRepeatedByColumn HUB_SRC.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+                expressedBy HUB_SRC.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn HUB_SRC.CONCAT_BUSINESS_KEY
+
+            //The date from the PIT that is linked to the driving table of this subselect 
+            Attribute $ SNAPSHOT__TIMESTAMP
+            Attributerepeatedbycomponent PIT
+                expressedBy PIT_SRC$.SNAPSHOT_TIMESTAMP
+                    expressionRepeatedByColumn PIT_SRC$.SNAPSHOT_TIMESTAMP				
+
+            //Take only the attributes from the SAT that have been flagged by the signature attribute
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy SAT_SRC$$.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$.DIM_ATTRIBUTE
+
+            //Create the HASH_DIFF field, a contatenation of all content fields that have been selected for usage in the implementation of the template on a certain BRIDGE
+            ArtifactPart DIM_HASH_DIFF
+
+                GROUP_1 expressedBy HASHFUNC[
+
+            ArtifactPart DIM_HASH_DIFF
+
+                GROUP_2 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[HUB_SRC.OBJECT_H_KEY]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn HUB_SRC.OBJECT_H_KEY VERTICAL
+
+            ArtifactPart DIM_HASH_DIFF
+
+                GROUP_3 expressedBy ||
+
+            ArtifactPart $ DIM_HASH_DIFF
+            Attributerepeatedbycomponent PITSAT
+
+                GROUP_4 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[SAT_SRC$$.DIM_ATTRIBUTE]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn SAT_SRC$$.DIM_ATTRIBUTE VERTICAL
+
+            ArtifactPart DIM_HASH_DIFF
+
+                GROUP_5 expressedBy HASHFUNC]
+                
+        consists of source table HUB_SRC		
+        componentrepeatedbycomponent HUB
+
+        //Join the PIT table
+        comp_subgroup_start $ pit_join_sub
+        componentGroupConditionedBy [(TAB PIT$ : SIGNATURE_OBJECT = PIT_DETAIL_TRANS)]
+        componentrepeatedbycomponent PIT
+
+            consists of inner join JOIN_PIT_SRC$
+            componentrepeatedbycomponent PIT$
+
+                        Artifact GENERAL_EXPRESSION				
+                            expressedBy HUB_SRC.OBJECT_H_KEY = PIT_SRC$.OBJECT_L_H_KEY
+                            expressionRepeatedByColumn PIT_SRC$.OBJECT_L_H_KEY
+
+            consists of joined table PIT_SRC$
+            componentrepeatedbycomponent PIT$
+
+            comp_subgroup_start $ SAT_SRC_SUBGROUP
+            componentsubgrouprepeatedbycomponent PITSAT$
+
+
+                //Join the SATs linked to that PIT table
+                consists of inner join JOIN_SAT_SRC$$
+                componentrepeatedbycomponent PITSAT$$
+            
+                            Artifact GENERAL_EXPRESSION
+                                GROUP_1 expressedBy PIT_SRC$.OBJECT_F_H_KEY = SAT_SRC$$$.OBJECT_H_KEY
+                                    expressionRepeatedByColumn SAT_SRC$$.OBJECT_H_KEY
+                                GROUP_2 expressedBy AND PIT_SRC$.SAT_LOAD_TIMESTAMP = SAT_SRC$$.TRANS_INDICATOR
+                                    expressionRepeatedByColumn SAT_SRC$$.TRANS_INDICATOR
+                                    
+                consists of joined table SAT_SRC$$
+                componentrepeatedbycomponent PITSAT$$
+
+            comp_subgroup_end
+
+        comp_subgroup_end
+
+    comp_group_end
+
+
+//subselect, created to flag those records that should be filtered
+    comp_group_start HASH_DIFF_DATA_SET_GROUP INL_V_GRP
+	componentgrouprepeatedbycomponent SCD2_DIM_HUB
+
+        consists of target inline_view HASH_DIFF_DATA_SET
+        RepeatedByObject SCD2_DIM_HUB
+
+            Artifact BASE_OBJECT_H_KEY
+                expressedBy DVO_BASE.BASE_OBJECT_H_KEY
+
+            Attribute BUSINESS_KEY
+                expressedBy DVO_BASE.BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_BASE.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+                expressedBy DVO_BASE.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_BASE.CONCAT_BUSINESS_KEY
+
+            Attribute SNAPSHOT__TIMESTAMP
+                expressedBy DVO_BASE.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn DVO_BASE.SNAPSHOT__TIMESTAMP				
+
+//            Attribute END_SNAPSHOT__TIMESTAMP
+//                expressedBy DVO_BASE.END_SNAPSHOT__TIMESTAMP
+//                    expressionRepeatedByColumn DVO_BASE.END_SNAPSHOT__TIMESTAMP
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy DVO_BASE.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+            
+            Artifact CHANGE_FLAG
+                expressedBy CASE WHEN COALESCE(LEAD( DVO_BASE.DIM_HASH_DIFF )OVER( PARTITION BY DVO_BASE.BASE_OBJECT_H_KEY ORDER BY DVO_BASE.SNAPSHOT__TIMESTAMP),#XXX#) != DVO_BASE.DIM_HASH_DIFF THEN 1 ELSE 0 END
+
+        consists of source inline_view DVO_BASE
+        RepeatedByObject SCD2_DIM_HUB
+        
+	comp_group_end
+
+
+//A subselect, created to filter out those records
+    comp_group_start FILTERED_DATA_SET_GROUP INL_V_GRP
+	componentgrouprepeatedbycomponent SCD2_DIM_HUB
+
+        consists of target inline_view FILTERED_DATA_SET
+        RepeatedByObject SCD2_DIM_HUB
+
+            Artifact BASE_OBJECT_H_KEY
+                expressedBy HASH_DIFF_DATA_SET.BASE_OBJECT_H_KEY
+
+            Attribute BUSINESS_KEY
+                expressedBy HASH_DIFF_DATA_SET.BUSINESS_KEY
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.BUSINESS_KEY
+
+            Attribute CONCAT_BUSINESS_KEY
+                expressedBy HASH_DIFF_DATA_SET.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.CONCAT_BUSINESS_KEY
+
+            Attribute SNAPSHOT__TIMESTAMP
+                expressedBy HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP				
+
+//            Attribute END_SNAPSHOT__TIMESTAMP
+//                expressedBy HASH_DIFF_DATA_SET.END_SNAPSHOT__TIMESTAMP
+//                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.END_SNAPSHOT__TIMESTAMP
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy HASH_DIFF_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy HASH_DIFF_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+        consists of source inline_view HASH_DIFF_DATA_SET
+        RepeatedByObject SCD2_DIM_HUB
+
+        consists of filter FILTER_HASH_DIFF_DATA_SET
+
+                Artifact GENERAL_EXPRESSION
+                    expressedBy HASH_DIFF_DATA_SET.CHANGE_FLAG = 1
+        
+	comp_group_end
+
+//The final select for the view with a recalculation of the end_timestamp to ensure matching records for the filtered out records
+    comp_group_start INS_GROUP INS_GRP
+	componentgrouprepeatedbycomponent SCD2_DIM_HUB
+
+        consists of target table DIM_TGT
+        RepeatedByObject SCD2_DIM_HUB
+
+            //Create the DIM_<entity>_HKEY field, a HASH based on a concatenation of the MAIN_HUB-hkey and the timestamp of the record 
+            AttributePart DIM_OBJECT_H_KEY
+
+                GROUP_1 expressedBy HASHFUNC[
+
+            AttributePart $ DIM_OBJECT_H_KEY
+
+                GROUP_2 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[FILTERED_DATA_SET.BUSINESS_KEY]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn FILTERED_DATA_SET.BUSINESS_KEY VERTICAL
+
+            AttributePart $ DIM_OBJECT_H_KEY
+
+                GROUP_3 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                    expressionRepeatedByColumn FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP VERTICAL
+
+
+            AttributePart DIM_OBJECT_H_KEY
+
+                GROUP_4 expressedBy HASHFUNC]
+
+
+            Attribute OBJECT_H_KEY
+                expressedBy FILTERED_DATA_SET.BASE_OBJECT_H_KEY
+
+            Attribute BUSINESS_KEY
+            //RepeatedByObject DVO
+                expressedBy FILTERED_DATA_SET.BUSINESS_KEY
+                    expressionRepeatedByColumn FILTERED_DATA_SET.BUSINESS_KEY VERTICAL
+
+            Attribute CONCAT_BUSINESS_KEY
+            //RepeatedByObject DVO
+                expressedBy FILTERED_DATA_SET.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn FILTERED_DATA_SET.CONCAT_BUSINESS_KEY VERTICAL
+
+            Attribute SNAPSHOT__TIMESTAMP
+                expressedBy FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP				
+
+            Attribute END_SNAPSHOT__TIMESTAMP
+                expressedBy COALESCE(LEAD(FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP) OVER (PARTITION BY FILTERED_DATA_SET.BASE_OBJECT_H_KEY	ORDER BY FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP),GTIMECAST[@#CURRENT_RECORD_LOAD_END_DATE#])
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy FILTERED_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+            Attribute $ DIM_ATTRIBUTE
+            Attributerepeatedbycomponent PITSAT
+                expressedBy FILTERED_DATA_SET.DIM_ATTRIBUTE
+                    expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
+
+        consists of source inline_view FILTERED_DATA_SET
+        RepeatedByObject SCD2_DIM_HUB
+
+        
+	comp_group_end
