@@ -1,0 +1,112 @@
+//Template to create a Snapshot dimension based on a HUB, all other attributes on the SATs will be used in the dimension 
+Template DIMENSION
+
+    comp_group_start MAIN_GROUP INS_GRP
+    //For all tables tagged with the SO
+	componentGroupRepeatedByComponent SNAP_DIM_HUB
+
+	consists of target table SNAP_DIM_HUB_TGT
+	componentrepeatedbycomponent SNAP_DIM_HUB
+
+		//Create the DIM_<entity>_HKEY field, a HASH based on a concatenation of the MAIN_HUB-hkey and the timestamp of the record 
+		AttributePart DIM_OBJECT_H_KEY
+
+			GROUP_1 expressedBy HASHFUNC[
+
+		AttributePart $ DIM_OBJECT_H_KEY
+
+			GROUP_2 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[HUB_SRC.BUSINESS_KEY]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+				expressionRepeatedByColumn HUB_SRC.BUSINESS_KEY VERTICAL
+
+		AttributePart $ DIM_OBJECT_H_KEY
+
+			GROUP_3 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[HUB_SRC.CONCAT_BUSINESS_KEY]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+				expressionRepeatedByColumn HUB_SRC.CONCAT_BUSINESS_KEY VERTICAL
+
+		AttributePart $ DIM_OBJECT_H_KEY
+
+			GROUP_4 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[PIT_SRC.SNAPSHOT_DATE]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+				expressionRepeatedByColumn PIT_SRC.SNAPSHOT_DATE VERTICAL
+
+
+		AttributePart DIM_OBJECT_H_KEY
+
+			GROUP_4 expressedBy HASHFUNC]
+
+        //Get the HKEY from the HUB
+		Attribute OBJECT_H_KEY
+			expressedBy HUB_SRC.OBJECT_H_KEY
+				expressionRepeatedByColumn HUB_SRC.OBJECT_H_KEY
+
+        //Get the Attribute from the HUB
+		Attribute BUSINESS_KEY
+			expressedBy HUB_SRC.BUSINESS_KEY
+				expressionRepeatedByColumn HUB_SRC.BUSINESS_KEY				
+
+        //Get the LOAD_TIMESTAMP from the PIT
+		Attribute LOAD_TIMESTAMP
+			expressedBy PIT_SRC.SNAPSHOT_DATE
+				expressionRepeatedByColumn PIT_SRC.SNAPSHOT_DATE	
+
+        //Get the END_LOAD_TIMESTAMP from the PIT
+		Attribute END_LOAD_TIMESTAMP
+			expressedBy PIT_SRC.END_SNAPSHOT_DATE
+				expressionRepeatedByColumn PIT_SRC.END_SNAPSHOT_DATE	
+
+        //Get all the OTHER_ATTR from all the SATs around the HUB
+		Attribute $ OTHER_ATTR
+		attributerepeatedbycomponent SAT
+			expressedBy SAT_SRC$.OTHER_ATTR
+				expressionRepeatedByColumn SAT_SRC$.OTHER_ATTR	
+            
+        //Get this calculated value from all the SATs around the HUB
+        Attribute $ NUMBER_OF_YEARS_SINCE_START_DATE
+		attributerepeatedbycomponent CSAT
+			expressedBy CSAT_SRC$.NUMBER_OF_YEARS_SINCE_START_DATE
+				expressionRepeatedByColumn CSAT_SRC$.NUMBER_OF_YEARS_SINCE_START_DATE
+
+	consists of source table PIT_SRC
+	componentrepeatedbycomponent CPIT		
+
+	consists of inner join JOIN_HUB_SRC		
+	componentrepeatedbycomponent HUB
+
+				Artifact GENERAL_EXPRESSION				
+					expressedBy PIT_SRC.OBJECT_H_KEY = HUB_SRC.OBJECT_H_KEY
+
+	consists of joined table HUB_SRC		
+	componentrepeatedbycomponent HUB
+			
+    comp_subgroup_start $ SAT_SRC_SUBGROUP
+	componentsubgrouprepeatedbycomponent SAT
+
+        //Join all the satellites
+		consists of inner join JOIN_SAT_SRC$
+		componentrepeatedbycomponent SAT$
+	
+					Artifact GENERAL_EXPRESSION
+						expressedBy PIT_SRC.SAT_OBJECT_H_KEY$ = SAT_SRC$.OBJECT_H_KEY AND PIT_SRC.LOAD_TIMESTAMP$ = SAT_SRC$.LOAD_TIMESTAMP
+
+		consists of joined table SAT_SRC$
+		componentrepeatedbycomponent  SAT$
+
+    comp_subgroup_end
+
+    comp_subgroup_start $ SAT_CALC_SRC_SUBGROUP
+       componentSubGroupConditionedBy [(TAB CSAT$ : HAS_ATTRIBUTES = Y)(TAB CSAT$ : SOURCE_SHORT_NAME != VST)]
+	   componentsubgrouprepeatedbycomponent CSAT
+
+        //Join all the calculated satellites based on a SAT that is surrounding this HUB
+		consists of inner join JOIN_SAT_CALC_SRC$
+		componentrepeatedbycomponent CSAT$
+
+					Artifact GENERAL_EXPRESSION
+						expressedBy PIT_SRC.SAT_OBJECT_H_KEY$ = CSAT_SRC$.OBJECT_H_KEY AND PIT_SRC.LOAD_TIMESTAMP$ = CSAT_SRC$.LOAD_TIMESTAMP
+
+		consists of joined table CSAT_SRC$
+		componentrepeatedbycomponent  CSAT$ 
+        
+     
+	comp_subgroup_end
+
+comp_group_end

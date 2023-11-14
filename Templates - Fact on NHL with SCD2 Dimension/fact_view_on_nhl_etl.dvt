@@ -1,0 +1,93 @@
+Template FACT
+//Template that creates a fact based on a NHL table
+//Selecting all dimensions based on the defined hubs in the NHL
+//selecting all other attributes from the NHL
+
+//Start building the subselects for each DIMENSION that is required from the setup
+    comp_group_start $ DVO_BASE_GROUP$ INL_V_GRP
+	componentGroupRepeatedByComponent SCD2_DIM_HUB_FK
+
+        //For each table take the specific attributes
+        consists of target inline_view DVO_BASE$
+        componentrepeatedbycomponent SCD2_DIM_HUB_FK$
+    
+            //HUB HKEY
+            Artifact BASE_OBJECT_H_KEY
+                expressedBy HUB_FK_SRC$.OBJECT_H_KEY
+                    expressionRepeatedByColumn HUB_FK_SRC$.OBJECT_H_KEY
+
+            //DIMENSION_KEY
+            Attribute DIM_OBJECT_H_KEY
+                expressedBy SCD2_DIM_HUB_SRC$.DIM_OBJECT_H_KEY
+                    expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.DIM_OBJECT_H_KEY				
+
+            //The date from the DIM that is linked to the driving table of this subselect 
+            Artifact FILTER_SNAPSHOT_TIMESTAMP
+                expressedBy SCD2_DIM_HUB_SRC$.SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.SNAPSHOT__TIMESTAMP				
+
+            //The date from the DIM that is linked to the driving table of this subselect 
+            Artifact FILTER_END_SNAPSHOT_TIMESTAMP
+                expressedBy SCD2_DIM_HUB_SRC$.END_SNAPSHOT__TIMESTAMP
+                    expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.END_SNAPSHOT__TIMESTAMP	
+
+
+        consists of source table HUB_FK_SRC$		
+        componentrepeatedbycomponent FACT_ON_NHL_DIM_SELECTION_FK$
+
+		//JOIN to the dimension table
+        consists of inner join JOIN_SCD2_DIM_HUB_SRC$
+        componentrepeatedbycomponent SCD2_DIM_HUB_FK$
+
+		    Artifact GENERAL_EXPRESSION				
+                expressedBy HUB_FK_SRC$.OBJECT_H_KEY = SCD2_DIM_HUB_SRC$.OBJECT_H_KEY
+                expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.OBJECT_H_KEY
+
+        consists of joined table SCD2_DIM_HUB_SRC$
+        componentrepeatedbycomponent SCD2_DIM_HUB_FK$
+
+    comp_group_end
+
+//create the final select 
+//selecting from the NHL, adding the selected SAT table, lookups of the dimension values
+	comp_group_start INSERT_END_GROUP INS_GRP
+	componentgrouprepeatedbycomponent FACT_NHL_SCD2
+
+		consists of target table FACT_NHL_SCD2_TGT
+		componentrepeatedbycomponent FACT_NHL_SCD2
+                   
+                    //Add the dimension key
+                    Attribute $ DIM_OBJECT_F_H_KEY$
+                    AttributeRepeatedBycomponent SCD2_DIM_HUB_FK
+                        expressedBy DVO_BASE$.DIM_OBJECT_H_KEY
+                        expressionRepeatedByColumn DVO_BASE$.DIM_OBJECT_H_KEY
+
+                    //Add the fields known as OTHER_ATTR
+                    Attribute OTHER_ATTR
+						expressedBy NHL.OTHER_ATTR
+						expressionRepeatedByColumn NHL.OTHER_ATTR
+
+        consists of source table NHL
+        componentrepeatedbycomponent NHL
+
+		//JOIN to the base cte, for each hub, tagged with SO: FACT_ON_NHL_DIM_SELECTION
+        comp_subgroup_start $ base_join_sub
+        componentrepeatedbycomponent SCD2_DIM_HUB_FK
+
+            consists of inner join JOIN_DVO_BASE$
+            componentrepeatedbycomponent SCD2_DIM_HUB_FK$
+
+				Artifact GENERAL_EXPRESSION				
+
+					GROUP_1 expressedBy DVO_BASE$.BASE_OBJECT_H_KEY = NHL.OBJECT_F_H_KEY$ 
+                    GROUP_2 expressedBy AND NHL.FACT_ON_NHL_TIME_FIELD >= DVO_BASE$.FILTER_SNAPSHOT_TIMESTAMP AND NHL.FACT_ON_NHL_TIME_FIELD < DVO_BASE$.FILTER_END_SNAPSHOT_TIMESTAMP
+                            expressionRepeatedByColumn NHL.FACT_ON_NHL_TIME_FIELD AND
+
+
+            consists of joined inline_view DVO_BASE$
+            componentrepeatedbycomponent SCD2_DIM_HUB_FK$
+
+        comp_subgroup_end
+
+	comp_group_end
+ 

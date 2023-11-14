@@ -46,15 +46,19 @@ Template DIMENSION
                 GROUP_2 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[HUB_SRC.OBJECT_H_KEY]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
                     expressionRepeatedByColumn HUB_SRC.OBJECT_H_KEY VERTICAL
 
+            ArtifactPart DIM_HASH_DIFF
+
+                GROUP_3 expressedBy ||
+
             ArtifactPart $ DIM_HASH_DIFF
             Attributerepeatedbycomponent PITSAT
 
-                GROUP_3 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[SAT_SRC$$.DIM_ATTRIBUTE]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
+                GROUP_4 expressedBy UPPER(REPLACE(COALESCE(TRIM(CHARCASTFRMT[SAT_SRC$$.DIM_ATTRIBUTE]), @#HASHDIFF_NULL_REPLACEMENT#) , @#HASHKEY_DELIMITER# , @#HASHKEY_ESCAPE_CHARACTER# || @#HASHKEY_DELIMITER#)) || @#HASHKEY_DELIMITER#
                     expressionRepeatedByColumn SAT_SRC$$.DIM_ATTRIBUTE VERTICAL
 
             ArtifactPart DIM_HASH_DIFF
 
-                GROUP_4 expressedBy HASHFUNC]
+                GROUP_5 expressedBy HASHFUNC]
                 
         consists of source table HUB_SRC		
         componentrepeatedbycomponent HUB
@@ -106,22 +110,15 @@ Template DIMENSION
         RepeatedByObject SCD2_DIM_HUB
 
             Artifact BASE_OBJECT_H_KEY
-
                 expressedBy DVO_BASE.BASE_OBJECT_H_KEY
 
-            Attribute $ BUSINESS_KEY
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
-            RepeatedByObject DVO
-
+            Attribute BUSINESS_KEY
                 expressedBy DVO_BASE.BUSINESS_KEY
-                    expressionRepeatedByColumn DVO_SRC.BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_BASE.BUSINESS_KEY
 
             Attribute CONCAT_BUSINESS_KEY
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
-            RepeatedByObject DVO
-
                 expressedBy DVO_BASE.CONCAT_BUSINESS_KEY
-                    expressionRepeatedByColumn DVO_SRC.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn DVO_BASE.CONCAT_BUSINESS_KEY
 
             Attribute SNAPSHOT__TIMESTAMP
                 expressedBy DVO_BASE.SNAPSHOT__TIMESTAMP
@@ -153,22 +150,15 @@ Template DIMENSION
         RepeatedByObject SCD2_DIM_HUB
 
             Artifact BASE_OBJECT_H_KEY
-
                 expressedBy HASH_DIFF_DATA_SET.BASE_OBJECT_H_KEY
 
-            Attribute $ BUSINESS_KEY
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
-            RepeatedByObject DVO
-
+            Attribute BUSINESS_KEY
                 expressedBy HASH_DIFF_DATA_SET.BUSINESS_KEY
-                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.BUSINESS_KEY
 
             Attribute CONCAT_BUSINESS_KEY
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
-            RepeatedByObject DVO
-
                 expressedBy HASH_DIFF_DATA_SET.CONCAT_BUSINESS_KEY
-                    expressionRepeatedByColumn DVO_SRC$.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.CONCAT_BUSINESS_KEY
 
             Attribute SNAPSHOT__TIMESTAMP
                 expressedBy HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP
@@ -179,7 +169,6 @@ Template DIMENSION
 //                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.END_SNAPSHOT__TIMESTAMP
 
             Attribute $ DIM_ATTRIBUTE
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
             Attributerepeatedbycomponent PITSAT
                 expressedBy HASH_DIFF_DATA_SET.DIM_ATTRIBUTE
                     expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE
@@ -228,32 +217,26 @@ Template DIMENSION
 
 
             Attribute OBJECT_H_KEY
-
                 expressedBy FILTERED_DATA_SET.BASE_OBJECT_H_KEY
 
-            Attribute $ BUSINESS_KEY
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
-            RepeatedByObject DVO
-
+            Attribute BUSINESS_KEY
+            //RepeatedByObject DVO
                 expressedBy FILTERED_DATA_SET.BUSINESS_KEY
-                    expressionRepeatedByColumn DVO_SRC$.BUSINESS_KEY
+                    expressionRepeatedByColumn FILTERED_DATA_SET.BUSINESS_KEY VERTICAL
 
             Attribute CONCAT_BUSINESS_KEY
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
-            RepeatedByObject DVO
-
+            //RepeatedByObject DVO
                 expressedBy FILTERED_DATA_SET.CONCAT_BUSINESS_KEY
-                    expressionRepeatedByColumn DVO_SRC$.CONCAT_BUSINESS_KEY
+                    expressionRepeatedByColumn FILTERED_DATA_SET.CONCAT_BUSINESS_KEY VERTICAL
 
             Attribute SNAPSHOT__TIMESTAMP
                 expressedBy FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP
-                    expressionRepeatedByColumn HASH_DIFF_DATA_SET.SNAPSHOT__TIMESTAMP				
+                    expressionRepeatedByColumn FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP				
 
             Attribute END_SNAPSHOT__TIMESTAMP
                 expressedBy COALESCE(LEAD(FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP) OVER (PARTITION BY FILTERED_DATA_SET.BASE_OBJECT_H_KEY	ORDER BY FILTERED_DATA_SET.SNAPSHOT__TIMESTAMP),GTIMECAST[@#CURRENT_RECORD_LOAD_END_DATE#])
 
             Attribute $ DIM_ATTRIBUTE
-            AttributeConditionedby [(TAB DVO$ : SIGNATURE_OBJECT = MAIN_HUB)]
             Attributerepeatedbycomponent PITSAT
                 expressedBy FILTERED_DATA_SET.DIM_ATTRIBUTE
                     expressionRepeatedByColumn SAT_SRC$$$.DIM_ATTRIBUTE

@@ -35,7 +35,7 @@ Template FACT
         consists of source table DVO_SRC$		
         componentrepeatedbycomponent DVO$
 
-		//JOIN to the dimension table
+		//JOIN to the dimensions created by the SCD2_DIM_HUB
         comp_subgroup_start dim_join_sub
         componentGroupConditionedBy [(TAB SCD2_DIM_HUB$ : SIGNATURE_OBJECT = SCD2_DIM_HUB)]
         componentrepeatedbycomponent SCD2_DIM_HUB$
@@ -49,6 +49,22 @@ Template FACT
 
             consists of joined table SCD2_DIM_HUB_SRC$
             componentrepeatedbycomponent SCD2_DIM_HUB$
+        comp_subgroup_end
+
+		//JOIN to the dimensions created by the SCD2_DIM_HUBC
+        comp_subgroup_start dim_join_subc
+        componentGroupConditionedBy [(TAB SCD2_DIM_HUBC$ : SIGNATURE_OBJECT = SCD2_DIM_HUBC)]
+        componentrepeatedbycomponent SCD2_DIM_HUBC$
+
+            consists of inner join JOIN_SCD2_DIM_HUB_SRC$
+            componentrepeatedbycomponent SCD2_DIM_HUBC$
+
+				Artifact GENERAL_EXPRESSION				
+					expressedBy DVO_SRC$.OBJECT_H_KEY = SCD2_DIM_HUB_SRC$.OBJECT_H_KEY
+					expressionRepeatedByColumn SCD2_DIM_HUB_SRC$.OBJECT_H_KEY
+
+            consists of joined table SCD2_DIM_HUB_SRC$
+            componentrepeatedbycomponent SCD2_DIM_HUBC$
         comp_subgroup_end
 
     comp_group_end

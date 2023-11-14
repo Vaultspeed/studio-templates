@@ -1,0 +1,44 @@
+Template SAT_CALC
+
+comp_group_start INSERT_GOUP INS_GRP
+componentGroupRepeatedByComponent CSAT
+
+	consists of target table SAT_CALC_TGT
+	componentrepeatedbycomponent CSAT
+
+		Attribute OBJECT_H_KEY
+			expressedBy SAT_SRC.OBJECT_H_KEY
+				expressionRepeatedByColumn SAT_SRC.OBJECT_H_KEY
+
+		Attribute LOAD_TIMESTAMP
+			expressedBy SAT_SRC.LOAD_TIMESTAMP
+				expressionRepeatedByColumn SAT_SRC.LOAD_TIMESTAMP
+
+		Attribute LOAD_CYCLE_ID
+			expressedBy SAT_SRC.LOAD_CYCLE_ID
+				expressionRepeatedByColumn SAT_SRC.LOAD_CYCLE_ID
+
+		Attribute HASH_DIFF
+			expressedBy SAT_SRC.HASH_DIFF
+				expressionRepeatedByColumn SAT_SRC.HASH_DIFF
+
+		Attribute DELETE_FLAG
+			expressedBy SAT_SRC.DELETE_FLAG
+				expressionRepeatedByColumn SAT_SRC.DELETE_FLAG
+
+		Attribute BUSINESS_SRC_KEY
+			expressedBy SAT_SRC.BUSINESS_SRC_KEY
+				expressionRepeatedByColumn SAT_SRC.BUSINESS_SRC_KEY
+
+		Attribute PRIMARY_KEY
+			expressedBy SAT_SRC.PRIMARY_KEY
+				expressionRepeatedByColumn SAT_SRC.PRIMARY_KEY
+
+        Attribute NUMBER_OF_YEARS_SINCE_START_DATE
+			expressedBy  DATEDIFF(year,SAT_SRC.START_DATE,current_date())
+				expressionRepeatedByColumn SAT_SRC.START_DATE
+                   
+	consists of source table SAT_SRC
+	componentrepeatedbycomponent SAT
+
+comp_group_end
