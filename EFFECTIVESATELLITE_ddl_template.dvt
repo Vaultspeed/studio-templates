@@ -1,0 +1,25 @@
+Template SAT_EFF
+
+comp_group_start DDL_GROUP CREA_GRP
+componentGroupRepeatedByComponent SAT
+
+	consists of CREATE_TABLE table SAT_EFF_TGT
+	componentrepeatedbycomponent TGT_SAT_EFF
+
+        Attribute OBJECT_H_KEY 
+        
+        Attribute LOAD_CYCLE_ID
+
+        Attribute LOAD_TIMESTAMP 
+                
+        Attribute TRANS_TIMESTAMP 
+                
+        Attribute BUSINESS_SRC_KEY 
+        
+        Attribute PRIMARY_KEY 
+        
+        Attribute FOREIGN_KEY 
+
+        Attribute OTHER_ATTR 
+
+comp_group_end

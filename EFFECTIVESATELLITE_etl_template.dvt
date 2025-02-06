@@ -1,0 +1,79 @@
+Template SAT_Effectivity
+	
+    comp_group_start max_ld INL_V_GRP
+    repeatedByObject SAT 
+    
+      consists of Aggregated inline_view max_ld
+        repeatedByObject SAT
+
+         Attribute OBJECT_H_KEY 
+            expressedBy SAT_MLD_SRC.OBJECT_H_KEY
+            expressionDefinedByAttribute SAT_MLD_SRC.OBJECT_H_KEY	
+        
+        Aggregated Artifact MAX_LOAD_TIMESTAMP
+            expressedBy MAX(SAT_MLD_SRC.LOAD_TIMESTAMP) 
+            expressionDefinedByAttribute SAT_MLD_SRC.LOAD_TIMESTAMP 
+
+
+    consists of source table SAT_MLD_SRC
+    repeatedByObject SAT
+    
+    comp_group_end
+
+
+comp_group_start eff_sat_group INS_GRP  
+repeatedByObject TGT_SAT_EFF   
+    consists of target table eff
+    repeatedByObject TGT_SAT_EFF
+        Attribute OBJECT_H_KEY 
+            expressedBy sat_src.OBJECT_H_KEY
+            expressionDefinedByAttribute sat_src.OBJECT_H_KEY
+        
+        Attribute LOAD_CYCLE_ID
+            expressedBy sat_src.LOAD_CYCLE_ID
+            expressionDefinedByAttribute sat_src.LOAD_CYCLE_ID
+
+        Attribute LOAD_TIMESTAMP 
+            expressedBy sat_src.LOAD_TIMESTAMP
+            expressionDefinedByAttribute sat_src.LOAD_TIMESTAMP
+                
+         Attribute TRANS_TIMESTAMP 
+            expressedBy sat_src.TRANS_TIMESTAMP
+            expressionDefinedByAttribute sat_src.TRANS_TIMESTAMP
+                
+       Attribute BUSINESS_SRC_KEY 
+            expressedBy sat_src.BUSINESS_SRC_KEY
+            expressionDefinedByAttribute sat_src.BUSINESS_SRC_KEY
+        
+        Attribute PRIMARY_KEY 
+            expressedBy sat_src.PRIMARY_KEY
+            expressionDefinedByAttribute sat_src.PRIMARY_KEY
+        
+        Attribute FOREIGN_KEY 
+            expressedBy sat_src.FOREIGN_KEY
+            expressionDefinedByAttribute sat_src.FOREIGN_KEY
+
+        Attribute OTHER_ATTR 
+            expressedBy sat_src.OTHER_ATTR
+            expressionDefinedByAttribute sat_src.OTHER_ATTR
+
+    consists of source table sat_src
+    repeatedByObject SAT
+
+    
+    consists of inner join sat_max_ld_join
+    repeatedByObject SAT
+        Artifact GENERAL_EXPRESSION
+            expressedBy sat_src.OBJECT_H_KEY = max_ld.OBJECT_H_KEY  AND sat_src.LOAD_TIMESTAMP = max_ld.MAX_LOAD_TIMESTAMP
+    consists of joined inline_view max_ld
+    repeatedByObject SAT
+
+    consists of filter sat_filter
+    repeatedByObject SAT
+
+        Artifact GENERAL_EXPRESSION
+            group_1 expressedBy sat_src.DELETE_FLAG = GCASTFRMT[@#DELETE_FLAG_NEGATIVE_VALUE#]
+           
+
+comp_group_end
+
