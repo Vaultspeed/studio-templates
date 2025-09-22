@@ -1,0 +1,54 @@
+Template SAT_Effectivity
+
+comp_group_start eff_sat_group INS_GRP  
+repeatedByObject TGT_SAT_EFF   
+    consists of target table eff
+    repeatedByObject TGT_SAT_EFF
+        Attribute OBJECT_H_KEY 
+            expressedBy sat_src.OBJECT_H_KEY
+            expressionDefinedByAttribute sat_src.OBJECT_H_KEY
+        
+        Attribute LOAD_CYCLE_ID
+            expressedBy sat_src.LOAD_CYCLE_ID
+            expressionDefinedByAttribute sat_src.LOAD_CYCLE_ID
+
+        Attribute LOAD_TIMESTAMP 
+            expressedBy sat_src.LOAD_TIMESTAMP
+            expressionDefinedByAttribute sat_src.LOAD_TIMESTAMP
+
+        Attribute LOAD_END_TIMESTAMP 
+            expressedBy sat_src.LOAD_END_TIMESTAMP
+            expressionDefinedByAttribute sat_src.LOAD_END_TIMESTAMP
+
+         Attribute TRANS_TIMESTAMP 
+            expressedBy sat_src.TRANS_TIMESTAMP
+            expressionDefinedByAttribute sat_src.TRANS_TIMESTAMP
+                
+       Attribute BUSINESS_SRC_KEY 
+            expressedBy sat_src.BUSINESS_SRC_KEY
+            expressionDefinedByAttribute sat_src.BUSINESS_SRC_KEY
+        
+        Attribute PRIMARY_KEY 
+            expressedBy sat_src.PRIMARY_KEY
+            expressionDefinedByAttribute sat_src.PRIMARY_KEY
+        
+        Attribute FOREIGN_KEY 
+            expressedBy sat_src.FOREIGN_KEY
+            expressionDefinedByAttribute sat_src.FOREIGN_KEY
+
+        Attribute OTHER_ATTR 
+            expressedBy sat_src.OTHER_ATTR
+            expressionDefinedByAttribute sat_src.OTHER_ATTR
+
+    consists of source table sat_src
+    repeatedByObject SAT
+
+    consists of filter sat_filter
+    repeatedByObject SAT
+
+        Artifact GENERAL_EXPRESSION
+            group_1 expressedBy sat_src.LOAD_END_TIMESTAMP = GCASTFRMT[@#CURRENT_RECORD_LOAD_END_DATE#] and 
+            group_2 expressedBy sat_src.DELETE_FLAG = GCASTFRMT[@#DELETE_FLAG_NEGATIVE_VALUE#]
+
+comp_group_end
+
